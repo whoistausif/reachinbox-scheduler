@@ -1,0 +1,73 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum EmailStatus {
+  scheduled
+  processing
+  sent
+  failed
+}
+
+model User {
+  id        String           @id @default(uuid())
+  googleId  String           @unique
+  email     String           @unique
+  name      String
+  avatar    String?
+  createdAt DateTime         @default(now())
+  emails    Email[]
+  slack     SlackConnection?
+}
+
+// One Slack workspace/channel per user. Absent row == not connected (notifications are skipped).
+model SlackConnection {
+  id         String   @id @default(uuid())
+  userId     String   @unique
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teamName   String?
+  channel    String?
+  webhookUrl String
+  createdAt  DateTime @default(now())
+}
+
+// Ethereal SMTP identities used as "from" senders.
+model Sender {
+  id       String  @id @default(uuid())
+  email    String  @unique
+  smtpUser String
+  smtpPass String
+  smtpHost String
+  smtpPort Int
+  emails   Email[]
+}
+
+model Email {
+  id          String      @id @default(uuid())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  senderId    String
+  sender      Sender      @relation(fields: [senderId], references: [id])
+  batchId     String
+  toEmail     String
+  subject     String
+  body        String
+  scheduledAt DateTime
+  hourlyLimit Int
+  status      EmailStatus @default(scheduled)
+  attempts    Int         @default(0)
+  sentAt      DateTime?
+  messageId   String?
+  previewUrl  String?
+  error       String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([userId, status, scheduledAt])
+  @@index([batchId])
+}
